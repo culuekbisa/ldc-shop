@@ -1,4 +1,4 @@
-import { getActiveProductCategories, getCategories, getActiveProducts, getVisitorCount, getUserPendingOrders, getSetting, getLiveCardStats } from "@/lib/db/queries";
+import { getActiveProductCategories, getCategories, getActiveProducts, getUserPendingOrders, getSetting, getLiveCardStats } from "@/lib/db/queries";
 import { getActiveAnnouncement } from "@/actions/settings";
 import { auth } from "@/lib/auth";
 import { HomeContent } from "@/components/home-content";
@@ -32,10 +32,9 @@ export default async function Home({
   const trustLevel = Number.isFinite(Number(session?.user?.trustLevel)) ? Number(session?.user?.trustLevel) : 0
 
   // Run all independent queries in parallel for better performance
-  const [products, announcement, visitorCount, categoryConfig, productCategories, wishlistEnabled] = await Promise.all([
+  const [products, announcement, categoryConfig, productCategories, wishlistEnabled] = await Promise.all([
     getActiveProducts({ isLoggedIn, trustLevel }).catch(() => []),
     getActiveAnnouncement().catch(() => null),
-    getVisitorCount().catch(() => 0),
     getCategories().catch(() => []),
     getActiveProductCategories({ isLoggedIn, trustLevel }).catch(() => []),
     (async () => {
@@ -96,15 +95,15 @@ export default async function Home({
   }
 
   const categoryNames = categoryConfig
-    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
-    .map((c) => c.name);
-  const extraCategories = productCategories.filter((c) => !categoryNames.includes(c)).sort();
+    .sort((a: { sortOrder?: number }, b: { sortOrder?: number }) => (a.sortOrder || 0) - (b.sortOrder || 0))
+    .map((c: { name: string }) => c.name);
+  const extraCategories = productCategories.filter((c: string) => !categoryNames.includes(c)).sort();
   const categories = [...categoryNames, ...extraCategories];
 
   return <HomeContent
     products={productsWithRatings}
     announcement={announcement}
-    visitorCount={visitorCount}
+    visitorCount={0}
     categories={categories}
     categoryConfig={categoryConfig}
     pendingOrders={pendingOrders}
