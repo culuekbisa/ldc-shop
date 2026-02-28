@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { cancelExpiredOrders, cleanupExpiredCardsIfNeeded } from "@/lib/db/queries";
+import { cancelExpiredOrders, cleanupExpiredCardsIfNeeded, runDatabaseMaintenance } from "@/lib/db/queries";
 
 const CRON_TOKEN_HEADER = "x-cron-cleanup-token";
 const CARD_CLEANUP_THROTTLE_MS = 60 * 1000;
@@ -33,17 +33,19 @@ export async function POST(request: Request) {
     }
 
     const startedAt = Date.now();
-    const [cardsResult, ordersResult] = await Promise.allSettled([
+    const [cardsResult, ordersResult, maintenanceResult] = await Promise.allSettled([
         cleanupExpiredCardsIfNeeded(CARD_CLEANUP_THROTTLE_MS),
         cancelExpiredOrders(),
+        runDatabaseMaintenance(),
     ]);
 
     const durationMs = Date.now() - startedAt;
 
-    if (cardsResult.status === "rejected" || ordersResult.status === "rejected") {
+    if (cardsResult.status === "rejected" || ordersResult.status === "rejected" || maintenanceResult.status === "rejected") {
         console.error("[cron-cleanup] failed", {
             cardsError: cardsResult.status === "rejected" ? String(cardsResult.reason) : null,
             ordersError: ordersResult.status === "rejected" ? String(ordersResult.reason) : null,
+            maintenanceError: maintenanceResult.status === "rejected" ? String(maintenanceResult.reason) : null,
         });
 
         return NextResponse.json(
@@ -57,5 +59,6 @@ export async function POST(request: Request) {
         durationMs,
         cardsCleanupRan: cardsResult.value,
         cancelledOrderCount: ordersResult.value.length,
+        maintenanceRan: maintenanceResult.status === "fulfilled" ? maintenanceResult.value : false,
     });
 }
